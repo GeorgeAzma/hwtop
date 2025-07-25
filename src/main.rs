@@ -165,7 +165,7 @@ fn net_filter(net: (&String, &NetworkData)) -> bool {
     !(name.contains("veth") || name == "lo" || name.starts_with("br-") || data.total_received() == 0 && data.total_transmitted() == 0)
 }
 
-// TODO: DISK-IO, CPU FANS
+// TODO: DISK-IO, CPU FANS, FIX REFRESH, FIX CURSOR
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let refresh_kind = RefreshKind::everything().without_processes();
     let mut sys = System::new_with_specifics(refresh_kind);
@@ -346,18 +346,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let gpu_power_usage = gpu.power_usage()? / 1000;
         let gpu_max_power = gpu.power_management_limit()? / 1000;
         let gpu_power_usage_percent = (gpu_power_usage as f32 / gpu_max_power as f32 * 100.0).round() as u32;
-        let usage_str = format!(" {GREEN}CPU{RESET}{}{cpu_usage:>3}%{RESET} ({}{cpu_temp}°C{RESET});{MAGENTA}GPU{RESET}{}{gpu_usage:>3}%{RESET} ({}{gpu_temp}°C{RESET}{}{gpu_power_usage:>4}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET});{RED}VRAM{RESET} {}{gpu_mem_percent}%{RESET}", 
-            percent_col(cpu_usage), percent_col(cpu_temp), percent_col(gpu_usage), percent_col(gpu_temp), percent_col(gpu_power_usage_percent), percent_col(gpu_power_usage_percent), percent_col(gpu_mem_percent));
-        write!(out, "{}", sized_rows(&[usage_str], &["CPU %".len() + 12, "VRAM %".len() + 12, "VRAM %".len() + 12]))?;
+        let cpu_usage_str = format!(" {GREEN}CPU{RESET}{}{cpu_usage:>3}%{RESET}{}{cpu_temp:>4}°C{RESET}", 
+            percent_col(cpu_usage), percent_col(cpu_temp));
+        let gpu_usage_str = format!(" {MAGENTA}GPU{RESET}{}{gpu_usage:>3}%{RESET}{}{gpu_temp:>4}°C {RESET}{}{gpu_power_usage:>3}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET}", 
+            percent_col(gpu_usage), percent_col(gpu_temp), percent_col(gpu_power_usage_percent), percent_col(gpu_power_usage_percent));
+        writeln!(out, "{cpu_usage_str}\n{gpu_usage_str}")?;
 
         // MEMORY USAGES
         let ram = mem_bar(sys.used_memory(), sys.total_memory(), 14);
         let swap = mem_usage(sys.used_swap(), sys.total_swap());
-        writeln!(out, " {RED}RAM{RESET} {ram}  {RED}SWP{RESET} {swap}")?;
+        writeln!(out, " {RED}RAM{RESET} {ram}  {swap}")?;
 
         let gpu_mem_info = gpu.memory_info()?;
         let vram = mem_bar(gpu_mem_info.used, gpu_mem_info.total, 14);
-        writeln!(out, "{RED}VRAM {RESET}{vram} ")?;
+        writeln!(out, "{RED}VRAM {RESET}{vram}     {}{gpu_mem_percent}%{RESET}", percent_col(gpu_mem_percent))?;
 
         // CORE USAGES
         let cpus = sys.cpus();
@@ -373,12 +375,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_core_freq_rating = max_core_freqs.iter().copied().max().unwrap_or(0);
         let single_core_freq_rating = min_core_freq_rating == max_core_freq_rating;
         let rating = format!("{min_core_freq_rating}{}MHz", if single_core_freq_rating { String::new() } else  { format!("-{max_core_freq_rating}") });
-        
+        let max_core_freq_str = format!("{max_core_freq}%");
+
         // CORE TEMPS
         let max_core_temp = core_temps.iter().copied().max().unwrap_or(0);
 
         writeln!(out, "{BLUE}CORE{RESET} {}{:>w$} {max_core}%{RESET}", &bars(&cores), percent_col(max_core), w = 5)?;
-        writeln!(out, "{BLUE}FREQ{RESET} {}{:>w$} {max_core_freq}%{RESET} {DIM}{rating}{RESET}", bars(&core_freqs), percent_col(max_core_freq), w = 5)?;
+        writeln!(out, "{BLUE}FREQ{RESET} {}{:>w$} {max_core_freq_str:<5}{RESET}{DIM}{rating}{RESET}", bars(&core_freqs), percent_col(max_core_freq), w = 5)?;
         writeln!(out, "{BLUE}TEMP{RESET} {}{:>w$} {max_core_temp}C{RESET}", bars(&core_temps), percent_col(max_core_temp), w = 5 + cores.len() - core_temps.len())?;
 
         // GPU CLOCK
@@ -444,7 +447,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if args.contains(&"extra".to_string()) {
             write!(out, "{}", rows(&comp_temps))?;
         }
-
         print!("{out}\x1b[?25h");
     }
     // print!("\x1b[?1049l");
