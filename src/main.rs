@@ -345,14 +345,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let gpu_power_usage = gpu.power_usage()? / 1000;
         let gpu_max_power = gpu.power_management_limit()? / 1000;
         let gpu_power_usage_percent = (gpu_power_usage as f32 / gpu_max_power as f32 * 100.0).round() as u32;
-        let usage_str = format!("{GREEN}CPU{RESET} {}{cpu_usage}%{RESET} ({}{cpu_temp}°C{RESET});{MAGENTA}GPU{RESET} {}{gpu_usage}%{RESET} ({}{gpu_temp}°C{RESET} {}{gpu_power_usage}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET});{RED}VRAM{RESET} {}{gpu_mem_percent}%{RESET}", 
+        let usage_str = format!(" {GREEN}CPU{RESET} {}{cpu_usage}%{RESET} ({}{cpu_temp}°C{RESET});{MAGENTA}GPU{RESET} {}{gpu_usage}%{RESET} ({}{gpu_temp}°C{RESET} {}{gpu_power_usage}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET});{RED}VRAM{RESET} {}{gpu_mem_percent}%{RESET}", 
             percent_col(cpu_usage), percent_col(cpu_temp), percent_col(gpu_usage), percent_col(gpu_temp), percent_col(gpu_power_usage_percent), percent_col(gpu_power_usage_percent), percent_col(gpu_mem_percent));
         write!(out, "{}", sized_rows(&[usage_str], &["CPU %".len() + 12, "VRAM %".len() + 12, "VRAM %".len() + 12]))?;
 
         // MEMORY USAGES
         let ram = mem_bar(sys.used_memory(), sys.total_memory(), 14);
         let swap = mem_usage(sys.used_swap(), sys.total_swap());
-        writeln!(out, "{RED}RAM {RESET} {ram}  {RED}SWP{RESET} {swap}")?;
+        writeln!(out, " {RED}RAM{RESET} {ram}  {RED}SWP{RESET} {swap}")?;
 
         let gpu_mem_info = gpu.memory_info()?;
         let vram = mem_bar(gpu_mem_info.used, gpu_mem_info.total, 14);
@@ -389,8 +389,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sm_max_clk = gpu.max_clock_info(Clock::SM).unwrap_or(0);
         let vid_clk = gpu.clock_info(Clock::Video).unwrap_or(0);
         let vid_max_clk = gpu.max_clock_info(Clock::Video).unwrap_or(0);
-        writeln!(out, "{BLUE}CLCK{RESET} {DIM}GFX{RESET}{}  {DIM}Mem{RESET}{}  {DIM}SM{RESET}{}  {DIM}Vid{RESET}{}", 
+        writeln!(out, "{BLUE}CLCK{RESET} {DIM}GFX{RESET}{}  {DIM}MEM{RESET}{}  {DIM}SM{RESET}{}  {DIM}VID{RESET}{}", 
             mhz(gfx_clk, gfx_max_clk), mhz(mem_clk, mem_max_clk), mhz(sm_clk, sm_max_clk), mhz(vid_clk, vid_max_clk))?;
+
+        // GPU FANS
+        writeln!(out, "{SKY}FANS{RESET} {fan_str}")?;
 
         // PCIE
         let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? / 1000; // MBps
@@ -410,17 +413,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_pcie_throughtput_gb = (max_pcie_throughtput as f32 / 1000.0 * 10.0).round() / 10.0; // GB/s
         let rx_col = percent_col((rx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
         let tx_col = percent_col((tx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
-        writeln!(out, "{SKY}PCIE{RESET} {GREEN}▼{RESET} {rx_col}{rx}M{RESET}  {MAGENTA}▲{RESET} {tx_col}{tx}M{RESET}  {DIM}{max_pcie_throughtput_gb}GB/s{RESET}", )?;
-            
-        // GPU FANS
-        writeln!(out, "{SKY}FANS{RESET} {fan_str}")?;
+        writeln!(out, "{SKY}PCIE{RESET} {GREEN}▼{RESET} {rx_col}{rx}M{RESET}  {MAGENTA}▲{RESET} {tx_col}{tx}M{RESET}   {DIM}{max_pcie_throughtput_gb}GB/s{RESET}", )?;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
         if let Some((_, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
             let (rx, tx) = (data.received() / 1024, data.transmitted() / 1024);
             let (prx, ptx) = (data.packets_received(), data.packets_transmitted());
-            writeln!(out, "{SKY}NETW{RESET} {GREEN}▼{RESET} {BLUE}{rx}K{RESET}  {MAGENTA}▲{RESET} {BLUE}{tx}K{RESET}   {BLUE}{prx}{RESET}/{RED}{ptx} {CYAN}pkts/s{RESET}", )?;
+            writeln!(out, "{SKY}NETW{RESET} {GREEN}▼{RESET} {BLUE}{rx}K{RESET}  {MAGENTA}▲{RESET} {BLUE}{tx}K{RESET}   {GREEN}{prx}{RESET}/{MAGENTA}{ptx} {CYAN}pkt/s{RESET}", )?;
         }
 
         // DISKS
