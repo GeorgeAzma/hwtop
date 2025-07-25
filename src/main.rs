@@ -171,7 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut sys = System::new_with_specifics(refresh_kind);
     let mut components = Components::new_with_refreshed_list();
     let mut disks = Disks::new_with_refreshed_list();
-    let nets = Networks::new_with_refreshed_list();
+    let mut nets = Networks::new_with_refreshed_list();
     let nvml = Nvml::init()?;
     let mobo = Motherboard::new().ok_or("No motherboard")?;
 
@@ -266,6 +266,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         sys.refresh_specifics(RefreshKind::everything().without_processes());
         disks.refresh(true);
+        nets.refresh(true);
         components.refresh(true);
         
         let mut out = String::new();
@@ -278,9 +279,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for i in 0..num_fans {
             let fan_percent = gpu.fan_speed(i).unwrap_or(0);
             let fan_rpm = gpu.fan_speed_rpm(i).unwrap_or(0);
-            fan_str += &format!("({}{fan_percent}%{RESET} {DIM}{fan_rpm:>4}rpm{RESET})", percent_col(fan_percent));
+            fan_str += &format!("{}{fan_percent}%{RESET} {DIM}{fan_rpm:>4}rpm{RESET}", percent_col(fan_percent));
             if i != num_fans - 1 {
-                fan_str += " ";
+                fan_str += ", ";
             }
         }
 
@@ -345,7 +346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let gpu_power_usage = gpu.power_usage()? / 1000;
         let gpu_max_power = gpu.power_management_limit()? / 1000;
         let gpu_power_usage_percent = (gpu_power_usage as f32 / gpu_max_power as f32 * 100.0).round() as u32;
-        let usage_str = format!(" {GREEN}CPU{RESET} {}{cpu_usage}%{RESET} ({}{cpu_temp}°C{RESET});{MAGENTA}GPU{RESET} {}{gpu_usage}%{RESET} ({}{gpu_temp}°C{RESET} {}{gpu_power_usage}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET});{RED}VRAM{RESET} {}{gpu_mem_percent}%{RESET}", 
+        let usage_str = format!(" {GREEN}CPU{RESET}{}{cpu_usage:>3}%{RESET} ({}{cpu_temp}°C{RESET});{MAGENTA}GPU{RESET}{}{gpu_usage:>3}%{RESET} ({}{gpu_temp}°C{RESET}{}{gpu_power_usage:>4}W{RESET}{DIM}/{RESET}{}{gpu_max_power}W{RESET});{RED}VRAM{RESET} {}{gpu_mem_percent}%{RESET}", 
             percent_col(cpu_usage), percent_col(cpu_temp), percent_col(gpu_usage), percent_col(gpu_temp), percent_col(gpu_power_usage_percent), percent_col(gpu_power_usage_percent), percent_col(gpu_mem_percent));
         write!(out, "{}", sized_rows(&[usage_str], &["CPU %".len() + 12, "VRAM %".len() + 12, "VRAM %".len() + 12]))?;
 
@@ -413,14 +414,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_pcie_throughtput_gb = (max_pcie_throughtput as f32 / 1000.0 * 10.0).round() / 10.0; // GB/s
         let rx_col = percent_col((rx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
         let tx_col = percent_col((tx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
-        writeln!(out, "{SKY}PCIE{RESET} {GREEN}▼{RESET} {rx_col}{rx}M{RESET}  {MAGENTA}▲{RESET} {tx_col}{tx}M{RESET}   {DIM}{max_pcie_throughtput_gb}GB/s{RESET}", )?;
+        writeln!(out, "{SKY}PCIE{RESET} {GREEN}▼{RESET}{rx_col}{rx:>4}M{RESET}  {MAGENTA}▲{RESET}{tx_col}{tx:>4}M{RESET}   {DIM}{max_pcie_throughtput_gb}GB/s{RESET}", )?;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
-        if let Some((_, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
+        if let Some((name, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
             let (rx, tx) = (data.received() / 1024, data.transmitted() / 1024);
             let (prx, ptx) = (data.packets_received(), data.packets_transmitted());
-            writeln!(out, "{SKY}NETW{RESET} {GREEN}▼{RESET} {BLUE}{rx}K{RESET}  {MAGENTA}▲{RESET} {BLUE}{tx}K{RESET}   {GREEN}{prx}{RESET}/{MAGENTA}{ptx} {CYAN}pkt/s{RESET}", )?;
+            writeln!(out, "{SKY}NETW{RESET} {GREEN}▼{RESET}{BLUE}{rx:>4}K{RESET}  {MAGENTA}▲{RESET}{BLUE}{tx:>4}K{RESET} {GREEN}{prx:>4}{RESET}/{MAGENTA}{ptx:<4} {CYAN}pkt/s{RESET}  {DIM}{name}{RESET}")?;
         }
 
         // DISKS
@@ -432,10 +433,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let free = disk.available_space();
             let usage = disk.usage();
             let name = disk.name().to_str().and_then(|d| d.strip_prefix("/dev/")).unwrap_or_default();
-            let rw = format!("{GREEN}{}{RESET}/{MAGENTA}{}{RESET}", format_size(usage.read_bytes), format_size(usage.written_bytes));
+            let rw = format!("{GREEN}{:>4}{RESET}/{MAGENTA}{:<4}{RESET}", format_size(usage.read_bytes), format_size(usage.written_bytes));
             let total_rw = format!("{GREEN}{}{RESET}/{MAGENTA}{}{RESET}", format_size(usage.total_read_bytes), format_size(usage.total_written_bytes));
             let usage = mem_usage(total - free, total);
-            disk_infos.push(format!("{SKY}{name}{RESET};{usage} ;{rw} ;Tot {total_rw}"))  
+            disk_infos.push(format!("{SKY}{name}{RESET};{usage};{rw};Tot {total_rw}"))  
         }
         write!(out, "{}", rows(&disk_infos))?;
 
