@@ -58,7 +58,7 @@ fn percent_slider(percent: u32) -> &'static str {
     }
 }
 
-// TODO: DISK-IO, CPU FANS, FIX REFRESH, FIX CURSOR
+// TODO: DISK-IO, CPU FANS, FIX REFRESH, FIX CURSOR, PROCESS RESOURCES
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let refresh_kind = RefreshKind::everything().without_processes();
     let mut sys = System::new_with_specifics(refresh_kind);
@@ -319,7 +319,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // REFRESH
-        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+        let delta = sysinfo::MINIMUM_CPU_UPDATE_INTERVAL;
+        std::thread::sleep(delta);
         sys.refresh_specifics(RefreshKind::everything().without_processes());
         disks.refresh(true);
         nets.refresh(true);
@@ -412,8 +413,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write!(out, "{sky}FANS{reset} {fan_str}\n")?;
 
         // PCIE
-        let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? / 1000; // MBps
-        let tx = gpu.pcie_throughput(PcieUtilCounter::Send)? / 1000; // MBps
+        let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? * 50 / 1000; // MBps
+        let tx = gpu.pcie_throughput(PcieUtilCounter::Send)? * 50 / 1000; // MBps
         let pcie_gen = gpu.max_pcie_link_gen()?;
         let pcie_width = gpu.max_pcie_link_width()?;
         // PCIe throughput per lane in MB/s (accounting for encoding overhead)
@@ -429,14 +430,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_pcie_throughtput_gb = (max_pcie_throughtput as f32 / 1000.0 * 10.0).round() / 10.0; // GB/s
         let rx_col = percent_col((rx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
         let tx_col = percent_col((tx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
-        write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx:>4}M{reset}  {magenta}▲{reset}{tx_col}{tx:>4}M{reset}   {dim}{max_pcie_throughtput_gb}GB/s{reset}\n", )?;
+        write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx:>5}M{reset}  {magenta}▲{reset}{tx_col}{tx:>5}M{reset}   {dim}{max_pcie_throughtput_gb}GB/s{reset}\n", )?;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
         if let Some((name, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
-            let (rx, tx) = (data.received() / 1024, data.transmitted() / 1024);
-            let (prx, ptx) = (data.packets_received(), data.packets_transmitted());
-            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>4}K{reset}  {magenta}▲{reset}{blue}{tx:>4}K{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
+            let (rx, tx) = ((data.received() as f32 / delta.as_secs_f32()) as u32 / 1024, (data.transmitted() as f32 / delta.as_secs_f32()) as u32 / 1024);
+            let (prx, ptx) = ((data.packets_received() as f32 / delta.as_secs_f32()) as u32, (data.packets_transmitted() as f32 / delta.as_secs_f32()) as u32);
+            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>5}K{reset}  {magenta}▲{reset}{blue}{tx:>5}K{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
         }
 
         // DISKS
@@ -448,7 +449,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let free = disk.available_space();
             let usage = disk.usage();
             let name = disk.name().to_str().and_then(|d| d.strip_prefix("/dev/")).unwrap_or_default();
-            let rw = format!("{green}{:>4}{reset}/{magenta}{:<4}{reset}", format_size(usage.read_bytes), format_size(usage.written_bytes));
+            let read_bytes = (usage.read_bytes as f32 / delta.as_secs_f32()) as u64;
+            let written_bytes = (usage.written_bytes as f32 / delta.as_secs_f32()) as u64;
+            let rw = format!("{green}{:>4}{reset}/{magenta}{:<4}{reset}", format_size(read_bytes), format_size(written_bytes));
             let total_rw = format!("{green}{}{reset}/{magenta}{}{reset}", format_size(usage.total_read_bytes), format_size(usage.total_written_bytes));
             let usage = mem_usage(total - free, total);
             disk_infos.push(format!("{sky}{name}{reset};{usage};{rw};Tot {total_rw}"))  
