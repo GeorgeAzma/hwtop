@@ -70,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = std::env::args().collect();
 
+    let once = args.contains(&"once".to_string());
     let use_ansi = !args.contains(&"plain".to_string());
     let (red, green, magenta, cyan, sky, blue, reset, dim) = if use_ansi {
         ("\x1b[31m",
@@ -468,6 +469,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             print!("{out}\x1b[?25h");
         } else {
             print!("{out}");
+        }
+        if once {
             break Ok(());
         }
     }

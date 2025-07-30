@@ -18,4 +18,5 @@ hwtop       # hardware sensors
 hwtop info  # hardware info
 hwtop extra # extra components and their temperatures
 hwtop plain # no ANSI colors
+hwtop once  # print once and exit 
 ```
