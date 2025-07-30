@@ -303,12 +303,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         return Ok(());
     }
-    if use_ansi {
+    if !once {
         print!("\x1b[?1049h");
     }
     loop {
         // refresh screen
-        if use_ansi {
+        if !once {
             print!("\x1b[H\x1b[2J\x1b[?25l");
         }
 
@@ -465,16 +465,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }).collect();
             writeln!(out, "{}", rows(&comp_temps))?;
         }
-        if use_ansi {
+        if !once {
             print!("{out}\x1b[?25h");
         } else {
             print!("{out}");
-        }
-        if once {
             break Ok(());
         }
     }
-    // if use _ansi {
+    // if !once {
     //     print!("\x1b[?1049l");
     // }
 }
