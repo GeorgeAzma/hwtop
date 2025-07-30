@@ -485,10 +485,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 print!("{out}");
             }
-            break Ok(());
+            break;
         }
     }
-    // if !once {
-    //     print!("\x1b[?1049l");
-    // }
+    if !once {
+        print!("\x1b[?1049l");
+    }
+    Ok(())
 }
