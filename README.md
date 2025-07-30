@@ -17,4 +17,5 @@ htop alternative for GPU/CPU and all other hardware info
 hwtop       # hardware sensors
 hwtop info  # hardware info
 hwtop extra # extra components and their temperatures
+hwtop plain # no ANSI colors
 ```
