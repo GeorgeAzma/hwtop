@@ -70,8 +70,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args: Vec<String> = std::env::args().collect();
 
-    let once = args.contains(&"once".to_string());
-    let use_ansi = !args.contains(&"plain".to_string());
+    let mut once = args.contains(&"once".to_string());
+    let mut use_ansi = !args.contains(&"plain".to_string());
+    let waybar = args.contains(&"waybar".to_string());
+    if waybar {
+        once = true;
+        use_ansi = false;
+    }
+
     let (red, green, magenta, cyan, sky, blue, reset, dim) = if use_ansi {
         ("\x1b[31m",
         "\x1b[32m",
@@ -353,16 +359,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             percent_col(cpu_usage), percent_col(cpu_temp));
         let gpu_usage_str = format!(" {magenta}GPU{reset}{}{gpu_usage:>3}%{reset}{}{gpu_temp:>4}°C {reset}{}{gpu_power_usage:>3}W{reset}{dim}/{reset}{}{gpu_max_power}W{reset}", 
             percent_col(gpu_usage), percent_col(gpu_temp), percent_col(gpu_power_usage_percent), percent_col(gpu_power_usage_percent));
-        writeln!(out, "{cpu_usage_str}\n{gpu_usage_str}")?;
+        write!(out, "{cpu_usage_str}\n{gpu_usage_str}\n")?;
 
         // MEMORY USAGES
         let ram = mem_bar(sys.used_memory(), sys.total_memory(), 14);
         let swap = mem_usage(sys.used_swap(), sys.total_swap());
-        writeln!(out, " {red}RAM{reset} {ram}  {swap}")?;
+        write!(out, " {red}RAM{reset} {ram}  {swap}\n")?;
 
         let gpu_mem_info = gpu.memory_info()?;
         let vram = mem_bar(gpu_mem_info.used, gpu_mem_info.total, 14);
-        writeln!(out, "{red}VRAM {reset}{vram}     {}{gpu_mem_percent}%{reset}", percent_col(gpu_mem_percent))?;
+        write!(out, "{red}VRAM {reset}{vram}     {}{gpu_mem_percent}%{reset}\n", percent_col(gpu_mem_percent))?;
 
         // CORE USAGES
         let cpus = sys.cpus();
@@ -374,18 +380,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // CORE FREQS
         let max_core_freq = core_freqs.iter().copied().max().unwrap_or(0);
-        let min_core_freq_rating = max_core_freqs.iter().copied().min().unwrap_or(0);
-        let max_core_freq_rating = max_core_freqs.iter().copied().max().unwrap_or(0);
-        let single_core_freq_rating = min_core_freq_rating == max_core_freq_rating;
-        let rating = format!("{min_core_freq_rating}{}MHz", if single_core_freq_rating { String::new() } else  { format!("-{max_core_freq_rating}") });
         let max_core_freq_str = format!("{max_core_freq}%");
+        let mut rating = String::new();
+        if !waybar {
+            let min_core_freq_rating = max_core_freqs.iter().copied().min().unwrap_or(0);
+            let max_core_freq_rating = max_core_freqs.iter().copied().max().unwrap_or(0);
+            let single_core_freq_rating = min_core_freq_rating == max_core_freq_rating;
+            rating = format!("{min_core_freq_rating}{}MHz", if single_core_freq_rating { String::new() } else  { format!("-{max_core_freq_rating}") });
+        }
 
         // CORE TEMPS
         let max_core_temp = core_temps.iter().copied().max().unwrap_or(0);
 
-        writeln!(out, "{blue}CORE{reset} {}{:>w$} {max_core}%{reset}", &bars(&cores), percent_col(max_core), w = 5)?;
-        writeln!(out, "{blue}FREQ{reset} {}{:>w$} {max_core_freq_str:<5}{reset}{dim}{rating}{reset}", bars(&core_freqs), percent_col(max_core_freq), w = 5)?;
-        writeln!(out, "{blue}TEMP{reset} {}{:>w$} {max_core_temp}C{reset}", bars(&core_temps), percent_col(max_core_temp), w = 5 + cores.len() - core_temps.len())?;
+        write!(out, "{blue}CORE{reset} {}{:>w$} {max_core}%{reset}\n", &bars(&cores), percent_col(max_core), w = 5)?;
+        write!(out, "{blue}FREQ{reset} {}{:>w$} {max_core_freq_str:<5}{reset}{dim}{rating}{reset}\n", bars(&core_freqs), percent_col(max_core_freq), w = 5)?;
+        write!(out, "{blue}TEMP{reset} {}{:>w$} {max_core_temp}C{reset}\n", bars(&core_temps), percent_col(max_core_temp), w = 5 + cores.len() - core_temps.len())?;
 
         // GPU CLOCK
         let gfx_clk = gpu.clock_info(Clock::Graphics).unwrap_or(0);
@@ -396,11 +405,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sm_max_clk = gpu.max_clock_info(Clock::SM).unwrap_or(0);
         let vid_clk = gpu.clock_info(Clock::Video).unwrap_or(0);
         let vid_max_clk = gpu.max_clock_info(Clock::Video).unwrap_or(0);
-        writeln!(out, "{blue}CLCK{reset} {dim}GFX{reset}{}  {dim}MEM{reset}{}  {dim}SM{reset}{}  {dim}VID{reset}{}", 
+        write!(out, "{blue}CLCK{reset} {dim}GFX{reset}{}  {dim}MEM{reset}{}  {dim}SM{reset}{}  {dim}VID{reset}{}\n", 
             mhz(gfx_clk, gfx_max_clk), mhz(mem_clk, mem_max_clk), mhz(sm_clk, sm_max_clk), mhz(vid_clk, vid_max_clk))?;
 
         // GPU FANS
-        writeln!(out, "{sky}FANS{reset} {fan_str}")?;
+        write!(out, "{sky}FANS{reset} {fan_str}\n")?;
 
         // PCIE
         let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? / 1000; // MBps
@@ -420,14 +429,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_pcie_throughtput_gb = (max_pcie_throughtput as f32 / 1000.0 * 10.0).round() / 10.0; // GB/s
         let rx_col = percent_col((rx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
         let tx_col = percent_col((tx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
-        writeln!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx:>4}M{reset}  {magenta}▲{reset}{tx_col}{tx:>4}M{reset}   {dim}{max_pcie_throughtput_gb}GB/s{reset}", )?;
+        write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx:>4}M{reset}  {magenta}▲{reset}{tx_col}{tx:>4}M{reset}   {dim}{max_pcie_throughtput_gb}GB/s{reset}\n", )?;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
         if let Some((name, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
             let (rx, tx) = (data.received() / 1024, data.transmitted() / 1024);
             let (prx, ptx) = (data.packets_received(), data.packets_transmitted());
-            writeln!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>4}K{reset}  {magenta}▲{reset}{blue}{tx:>4}K{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}")?;
+            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>4}K{reset}  {magenta}▲{reset}{blue}{tx:>4}K{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
         }
 
         // DISKS
@@ -463,12 +472,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 comp_temp
             }).collect();
-            writeln!(out, "{}", rows(&comp_temps))?;
+            write!(out, "{}", rows(&comp_temps))?;
+        }
+        if out.ends_with('\n') {
+            out.pop();
         }
         if !once {
             print!("{out}\x1b[?25h");
         } else {
-            print!("{out}");
+            if waybar {
+                print!("{{\"tooltip\":\"{}\"}}", out.replace("\n", "\\n"));
+            } else {
+                print!("{out}");
+            }
             break Ok(());
         }
     }

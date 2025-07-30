@@ -14,9 +14,10 @@ htop alternative for GPU/CPU and all other hardware info
 
 ### How To Use
 ``` bash
-hwtop       # hardware sensors
-hwtop info  # hardware info
-hwtop extra # extra components and their temperatures
-hwtop plain # no ANSI colors
-hwtop once  # print once and exit 
+hwtop        # hardware sensors
+hwtop info   # hardware info
+hwtop extra  # extra components and their temperatures
+hwtop plain  # no ANSI colors
+hwtop once   # print once and exit 
+hwtop waybar # waybar tooltip compatible print 
 ```
