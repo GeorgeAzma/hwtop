@@ -103,16 +103,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             format!("{bytes}B")
         } else if bytes < mib {
             let kib_val = bytes_f / kib as f64;
-            format!("{kib_val:.0}K")
+            if bytes >= 100 * kib {
+                format!("{kib_val:.0}K")
+            } else {
+                let kib_val = (kib_val * 10.0).round() / 10.0;
+                format!("{kib_val}K")
+            }
         } else if bytes < gib {
             let mib_val = bytes_f / mib as f64;
-            format!("{mib_val:.0}M")
+            if bytes >= 100 * mib {
+                format!("{mib_val:.0}M")
+            } else {
+                let mib_val = (mib_val * 10.0).round() / 10.0;
+                format!("{mib_val}M")
+            }
         } else if bytes < tib {
+            let gib_val = bytes_f / gib as f64;
             if bytes >= 100 * gib {
-                let gib_val = bytes_f / gib as f64;
                 format!("{gib_val:.0}G")
             } else {
-                let gib_val = (bytes_f / gib as f64 * 10.0).round() / 10.0;
+                let gib_val = (gib_val * 10.0).round() / 10.0;
                 format!("{gib_val}G")
             }
         } else {
@@ -120,7 +130,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if bytes >= 100 * tib {
                 format!("{tib_val:.0}T")
             } else {
-                format!("{tib_val:.1}T")
+                let tib_val = (tib_val * 10.0).round() / 10.0;
+                format!("{tib_val}T")
             }
         }
     }
@@ -184,7 +195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     fn net_filter(net: (&String, &NetworkData)) -> bool {
         let (name, data) = net;
-        !(name.contains("veth") || name == "lo" || name.starts_with("br-") || data.total_received() == 0 && data.total_transmitted() == 0)
+        !(data.total_received() == 0 && data.total_transmitted() == 0 || name == "lo" || name.starts_with("br-") || name.contains("veth") || name.contains("docker"))
     }
 
     fn get_comp_temps(components: &mut Components) -> BTreeMap<String, Vec<u32>> {
@@ -437,9 +448,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
         if let Some((name, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
-            let (rx, tx) = ((data.received() as f32 / delta.as_secs_f32()) as u32 / 1024, (data.transmitted() as f32 / delta.as_secs_f32()) as u32 / 1024);
+            let rx = format_size((data.received() as f32 / delta.as_secs_f32()) as u64);
+            let tx = format_size((data.transmitted() as f32 / delta.as_secs_f32()) as u64);
             let (prx, ptx) = ((data.packets_received() as f32 / delta.as_secs_f32()) as u32, (data.packets_transmitted() as f32 / delta.as_secs_f32()) as u32);
-            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>5}K{reset}  {magenta}▲{reset}{blue}{tx:>5}K{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
+            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>6}{reset}  {magenta}▲{reset}{blue}{tx:>6}{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
         }
 
         // DISKS
