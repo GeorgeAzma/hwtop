@@ -451,7 +451,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let rx = format_size((data.received() as f32 / delta.as_secs_f32()) as u64);
             let tx = format_size((data.transmitted() as f32 / delta.as_secs_f32()) as u64);
             let (prx, ptx) = ((data.packets_received() as f32 / delta.as_secs_f32()) as u32, (data.packets_transmitted() as f32 / delta.as_secs_f32()) as u32);
-            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>6}{reset}  {magenta}▲{reset}{blue}{tx:>6}{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4} {cyan}pkt/s{reset}  {dim}{name}{reset}\n")?;
+            write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>6}{reset}  {magenta}▲{reset}{blue}{tx:>6}{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4}{reset} {dim}{name}{reset}\n")?;
         }
 
         // DISKS
