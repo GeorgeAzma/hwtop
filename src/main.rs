@@ -413,11 +413,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write!(out, "{sky}FANS{reset} {fan_str}\n")?;
 
         // PCIE
-        let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? * 50 / 1000; // MBps
-        let tx = gpu.pcie_throughput(PcieUtilCounter::Send)? * 50 / 1000; // MBps
+        let rx = gpu.pcie_throughput(PcieUtilCounter::Receive)? * 50; // KB/s
+        let tx = gpu.pcie_throughput(PcieUtilCounter::Send)? * 50; // KB/s
         let pcie_gen = gpu.max_pcie_link_gen()?;
         let pcie_width = gpu.max_pcie_link_width()?;
-        // PCIe throughput per lane in MB/s (accounting for encoding overhead)
+        // PCIe throughput per lane in KB/s (accounting for encoding overhead)
         let pcie_throughput_per_lane = match pcie_gen {
             1 => 250,   // PCIe 1.0: 2.5 GT/s * 0.8 (8b/10b encoding) / 8 bits = 250 MB/s
             2 => 500,   // PCIe 2.0: 5.0 GT/s * 0.8 / 8 = 500 MB/s  
@@ -425,12 +425,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             4 => 1969,  // PCIe 4.0: 16.0 GT/s * 0.9846 / 8 = 1969 MB/s
             5 => 3938,  // PCIe 5.0: 32.0 GT/s * 0.9846 / 8 = 3938 MB/s
             _ => 1969,  // Default to PCIe 4.0 if unknown
-        };
-        let max_pcie_throughtput = pcie_throughput_per_lane * pcie_width;
-        let max_pcie_throughtput_gb = (max_pcie_throughtput as f32 / 1000.0 * 10.0).round() / 10.0; // GB/s
+        } * 1000;
+        let max_pcie_throughtput = pcie_throughput_per_lane as u64 * pcie_width as u64;
+        let max_pcie_throughtput_str = format_size(max_pcie_throughtput * 1000);
         let rx_col = percent_col((rx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
         let tx_col = percent_col((tx as f32 / max_pcie_throughtput as f32 * 100.0).round() as u32);
-        write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx:>5}M{reset}  {magenta}▲{reset}{tx_col}{tx:>5}M{reset}   {dim}{max_pcie_throughtput_gb}GB/s{reset}\n", )?;
+        let rx_str = format_size(rx as u64 * 1000);
+        let tx_str = format_size(tx as u64 * 1000);
+        write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx_str:>6}{reset}  {magenta}▲{reset}{tx_col}{tx_str:>6}{reset}   {dim}{max_pcie_throughtput_str}/s{reset}\n", )?;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
