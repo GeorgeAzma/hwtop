@@ -331,9 +331,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // REFRESH
-        let now = time::Instant::now();
-        let delta = (now - start).as_secs_f32();
-        start = now;
         std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
         sys.refresh_specifics(RefreshKind::everything().without_processes());
         disks.refresh(true);
@@ -394,8 +391,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let core_freqs: Vec<u32> = cpus.iter().zip(max_core_freqs.iter()).map(|(cpu, max_freq)| (cpu.frequency() as f32 / *max_freq as f32 * 100.0).round().min(100.0) as u32).collect();
         
         // CORE FREQS
-        let max_core_freq = core_freqs.iter().copied().max().unwrap_or(0);
-        let max_core_freq_str = format!("{max_core_freq}%");
+        let max_core_freq = cpus.iter().map(|cpu| cpu.frequency()).max().unwrap_or(0);
+        let max_core_freq_pct = core_freqs.iter().copied().max().unwrap_or(0);
+        let max_core_freq_str = format!("{max_core_freq}");
         let mut rating = String::new();
         if !waybar {
             let min_core_freq_rating = max_core_freqs.iter().copied().min().unwrap_or(0);
@@ -407,9 +405,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // CORE TEMPS
         let max_core_temp = core_temps.iter().copied().max().unwrap_or(0);
 
-        write!(out, "{blue}CORE{reset} {}{:>w$} {max_core}%{reset}\n", &bars(&cores), percent_col(max_core), w = 5)?;
-        write!(out, "{blue}FREQ{reset} {}{:>w$} {max_core_freq_str:<5}{reset}{dim}{rating}{reset}\n", bars(&core_freqs), percent_col(max_core_freq), w = 5)?;
-        write!(out, "{blue}TEMP{reset} {}{:>w$} {max_core_temp}C{reset}\n", bars(&core_temps), percent_col(max_core_temp), w = 5 + cores.len() - core_temps.len())?;
+        let off = if use_ansi { 5 } else { 0 };
+        write!(out, "{blue}CORE{reset} {}{:>w$} {max_core}%{reset}\n", &bars(&cores), percent_col(max_core), w = off)?;
+        write!(out, "{blue}FREQ{reset} {}{:>w$} {max_core_freq_str:<4}MHz {reset}{dim}{rating}{reset}\n", bars(&core_freqs), percent_col(max_core_freq_pct), w = off)?;
+        write!(out, "{blue}TEMP{reset} {}{:>w$} {max_core_temp}C{reset}\n", bars(&core_temps), percent_col(max_core_temp), w = off + cores.len() - core_temps.len())?;
 
         // GPU CLOCK
         let gfx_clk = gpu.clock_info(Clock::Graphics).unwrap_or(0);
@@ -447,6 +446,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let rx_str = format_size(rx as u64 * 1000);
         let tx_str = format_size(tx as u64 * 1000);
         write!(out, "{sky}PCIE{reset} {green}▼{reset}{rx_col}{rx_str:>6}{reset}  {magenta}▲{reset}{tx_col}{tx_str:>6}{reset}   {dim}{max_pcie_throughtput_str}/s{reset}\n", )?;
+
+        let now = time::Instant::now();
+        let delta = (now - start).as_secs_f32();
+        start = now;
 
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
