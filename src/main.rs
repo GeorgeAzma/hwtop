@@ -1,6 +1,6 @@
 use sysinfo::{Components, Disks, Motherboard, NetworkData, Networks, RefreshKind, System};
 use nvml_wrapper::{enum_wrappers::device::{Clock, PcieUtilCounter, TemperatureSensor}, Nvml};
-use std::{cmp::Reverse, collections::BTreeMap, fmt::Write};
+use std::{cmp::Reverse, collections::BTreeMap, fmt::Write, time};
 
 
 #[must_use]
@@ -323,6 +323,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !once {
         print!("\x1b[?1049h");
     }
+    let mut start = time::Instant::now();
     loop {
         // refresh screen
         if !once {
@@ -330,8 +331,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // REFRESH
-        let delta = sysinfo::MINIMUM_CPU_UPDATE_INTERVAL;
-        std::thread::sleep(delta);
+        let now = time::Instant::now();
+        let delta = (now - start).as_secs_f32();
+        start = now;
+        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
         sys.refresh_specifics(RefreshKind::everything().without_processes());
         disks.refresh(true);
         nets.refresh(true);
@@ -448,9 +451,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // NETWORK
         let net_iter = nets.iter().filter(|&net| net_filter(net)).collect::<Vec<_>>();
         if let Some((name, data)) = net_iter.iter().max_by_key(|(_, data)| Reverse(data.total_transmitted() + data.total_received())) {
-            let rx = format_size((data.received() as f32 / delta.as_secs_f32()) as u64);
-            let tx = format_size((data.transmitted() as f32 / delta.as_secs_f32()) as u64);
-            let (prx, ptx) = ((data.packets_received() as f32 / delta.as_secs_f32()) as u32, (data.packets_transmitted() as f32 / delta.as_secs_f32()) as u32);
+            let rx = format_size((data.received() as f32 / delta) as u64);
+            let tx = format_size((data.transmitted() as f32 / delta) as u64);
+            let prx = (data.packets_received() as f32 / delta) as u32;
+            let ptx = (data.packets_transmitted() as f32 / delta) as u32;
             write!(out, "{sky}NETW{reset} {green}▼{reset}{blue}{rx:>6}{reset}  {magenta}▲{reset}{blue}{tx:>6}{reset} {green}{prx:>4}{reset}/{magenta}{ptx:<4}{reset} {dim}{name}{reset}\n")?;
         }
 
@@ -463,8 +467,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let free = disk.available_space();
             let usage = disk.usage();
             let name = disk.name().to_str().and_then(|d| d.strip_prefix("/dev/")).unwrap_or_default();
-            let read_bytes = (usage.read_bytes as f32 / delta.as_secs_f32()) as u64;
-            let written_bytes = (usage.written_bytes as f32 / delta.as_secs_f32()) as u64;
+            let read_bytes = (usage.read_bytes as f32 / delta) as u64;
+            let written_bytes = (usage.written_bytes as f32 / delta) as u64;
             let rw = format!("{green}{:>4}{reset}/{magenta}{:<4}{reset}", format_size(read_bytes), format_size(written_bytes));
             let total_rw = format!("{green}{}{reset}/{magenta}{}{reset}", format_size(usage.total_read_bytes), format_size(usage.total_written_bytes));
             let usage = mem_usage(total - free, total);
