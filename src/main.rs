@@ -498,9 +498,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }).collect();
             write!(out, "{}", rows(&comp_temps))?;
         }
-        if out.ends_with('\n') {
-            out.pop();
-        }
         if !once {
             print!("{out}\x1b[?25h");
         } else {
