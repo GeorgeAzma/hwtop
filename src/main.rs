@@ -12,8 +12,12 @@ fn sized_rows(rows: &[String], sizes: &[usize]) -> String {
     assert_eq!(cols[0].len(), sizes.len());
     let mut out = String::new();
     for row in cols {
+        let len = row.len();
         for (i, item) in row.into_iter().enumerate() {
-            out += &format!("{item:<width$} ", width = sizes[i])
+            let size = if i == len - 1 {
+                0
+            } else { sizes[i] };
+            out += &format!("{item:<width$} ", width = size)
         }
         out.push('\n');
     }
