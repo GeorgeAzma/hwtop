@@ -1,7 +1,6 @@
 htop alternative for GPU/CPU and all other hardware info
 
 ![TUI Alacritty](tui-alacritty.png)
-![TUI VSCode](tui-vscode.png)
 ![TUI VSCode](tui-hwinfo.png)
 
 ### Features
@@ -21,3 +20,8 @@ hwtop plain  # no ANSI colors
 hwtop once   # print once and exit 
 hwtop waybar # waybar tooltip compatible print 
 ```
+
+#### TODO
+- [ ] fix cursor disappearing
+- [ ] add per process CPU/GPU usage
+- [ ] remove extra newline and improve text alignment
